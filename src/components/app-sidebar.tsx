@@ -22,8 +22,8 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
-import { authClient } from "@/lib/auth-client";
 import { useHasActiveSubscription } from "@/features/subscriptions/hooks/use-subscription";
+import { authClient } from "@/lib/auth-client";
 
 const menuItems = [
   {
@@ -45,13 +45,14 @@ const menuItems = [
         url: "/executions",
       },
     ],
-  }
+  },
 ];
 
 export const AppSidebar = () => {
   const router = useRouter();
   const pathname = usePathname();
-  const { hasActiveSubscription, isLoading } = useHasActiveSubscription();
+  const { hasActiveSubscription, isBillingEnabled, isLoading } =
+    useHasActiveSubscription();
 
   return (
     <Sidebar collapsible="icon">
@@ -59,7 +60,12 @@ export const AppSidebar = () => {
         <SidebarMenuItem>
           <SidebarMenuButton asChild className="gap-x-4 h-10 px-4">
             <Link href="/" prefetch>
-              <Image src="/logos/logo.svg" alt="Nodebase" width={30} height={30} />
+              <Image
+                src="/logos/logo.svg"
+                alt="Nodebase"
+                width={30}
+                height={30}
+              />
               <span className="font-semibold text-sm">Nodebase</span>
             </Link>
           </SidebarMenuButton>
@@ -96,10 +102,10 @@ export const AppSidebar = () => {
       </SidebarContent>
       <SidebarFooter>
         <SidebarMenu>
-          {!hasActiveSubscription && !isLoading && (
+          {isBillingEnabled && !hasActiveSubscription && !isLoading && (
             <SidebarMenuItem>
               <SidebarMenuButton
-                tooltip="Upgade to Pro"
+                tooltip="Upgrade to Pro"
                 className="gap-x-4 h-10 px-4"
                 onClick={() => authClient.checkout({ slug: "pro" })}
               >
@@ -108,27 +114,31 @@ export const AppSidebar = () => {
               </SidebarMenuButton>
             </SidebarMenuItem>
           )}
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              tooltip="Billing Portal"
-              className="gap-x-4 h-10 px-4"
-              onClick={() => authClient.customer.portal()}
-            >
-              <CreditCardIcon className="h-4 w-4" />
-              <span>Billing Portal</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
+          {isBillingEnabled && !isLoading && (
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                tooltip="Billing Portal"
+                className="gap-x-4 h-10 px-4"
+                onClick={() => authClient.customer.portal()}
+              >
+                <CreditCardIcon className="h-4 w-4" />
+                <span>Billing Portal</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          )}
           <SidebarMenuItem>
             <SidebarMenuButton
               tooltip="Sign out"
               className="gap-x-4 h-10 px-4"
-              onClick={() => authClient.signOut({
-                fetchOptions: {
-                  onSuccess: () => {
-                    router.push("/login");
+              onClick={() =>
+                authClient.signOut({
+                  fetchOptions: {
+                    onSuccess: () => {
+                      router.push("/login");
+                    },
                   },
-                },
-              })}
+                })
+              }
             >
               <LogOutIcon className="h-4 w-4" />
               <span>Sign out</span>
