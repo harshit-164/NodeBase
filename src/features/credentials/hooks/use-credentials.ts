@@ -28,6 +28,9 @@ export const useCreateCredential = () => {
         queryClient.invalidateQueries(
           trpc.credentials.getMany.queryOptions({}),
         );
+        queryClient.invalidateQueries(
+          trpc.credentials.getByType.queryFilter({ type: data.type }),
+        );
       },
       onError: (error) => {
         toast.error(`Failed to create credential: ${error.message}`);
@@ -50,6 +53,9 @@ export const useRemoveCredential = () => {
         queryClient.invalidateQueries(trpc.credentials.getMany.queryOptions({}));
         queryClient.invalidateQueries(
           trpc.credentials.getOne.queryFilter({ id: data.id }),
+        );
+        queryClient.invalidateQueries(
+          trpc.credentials.getByType.queryFilter({ type: data.type }),
         );
       }
     })
@@ -80,6 +86,9 @@ export const useUpdateCredential = () => {
         );
         queryClient.invalidateQueries(
           trpc.credentials.getOne.queryOptions({ id: data.id }),
+        );
+        queryClient.invalidateQueries(
+          trpc.credentials.getByType.queryFilter({ type: data.type }),
         );
       },
       onError: (error) => {

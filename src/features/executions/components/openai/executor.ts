@@ -46,16 +46,6 @@ export const openAiExecutor: NodeExecutor<OpenAiData> = async ({
     throw new NonRetriableError("OpenAi node: Variable name is missing");
   }
 
-  if (!data.credentialId) {
-    await publish(
-      openAiChannel().status({
-        nodeId,
-        status: "error",
-      }),
-    );
-    throw new NonRetriableError("OpenAi node: Credential is required");
-  }
-
   if (!data.userPrompt) {
     await publish(
       openAiChannel().status({
@@ -71,35 +61,47 @@ export const openAiExecutor: NodeExecutor<OpenAiData> = async ({
     : "You are a helpful assistant.";
   const userPrompt = Handlebars.compile(data.userPrompt)(context);
 
-  const credential = await step.run("get-credential", () => {
-    return prisma.credential.findUnique({
-      where: {
-        id: data.credentialId,
-        userId,
-      },
-    });
-  });
+  // Resolve API key: prefer .env hardcoded key, fallback to DB credential
+  let apiKey: string | undefined = process.env.OPENAI_API_KEY;
 
-  if (!credential) {
+  if (!apiKey && data.credentialId) {
+    const credential = await step.run("get-credential", () => {
+      return prisma.credential.findUnique({
+        where: {
+          id: data.credentialId,
+          userId,
+        },
+      });
+    });
+
+    if (credential) {
+      apiKey = decrypt(credential.value);
+    }
+  }
+
+  if (!apiKey) {
     await publish(
       openAiChannel().status({
         nodeId,
         status: "error",
       })
     );
-    throw new NonRetriableError("OpenAI node: Credential not found");
+    throw new NonRetriableError(
+      "OpenAI node: No API key found. Set OPENAI_API_KEY in your .env file or select a credential."
+    );
   }
 
   const openai = createOpenAI({
-    apiKey: decrypt(credential.value),
+    apiKey,
   });
 
   try {
+    // Hardcoded to gpt-4o-mini
     const { steps } = await step.ai.wrap(
       "openai-generate-text",
       generateText,
       {
-        model: openai("gpt-4"),
+        model: openai("gpt-4o-mini"),
         system: systemPrompt,
         prompt: userPrompt,
         experimental_telemetry: {

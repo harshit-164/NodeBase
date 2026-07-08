@@ -47,7 +47,7 @@ export const AnthropicNode = memo((props: NodeProps<AnthropicNodeType>) => {
 
   const nodeData = props.data;
   const description = nodeData?.userPrompt
-    ? `claude-sonnet-4-5: ${nodeData.userPrompt.slice(0, 50)}...`
+    ? `claude-3-5-sonnet-latest: ${nodeData.userPrompt.slice(0, 50)}...`
     : "Not configured";
 
   return (

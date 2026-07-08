@@ -46,16 +46,6 @@ export const geminiExecutor: NodeExecutor<GeminiData> = async ({
     throw new NonRetriableError("Gemini node: Variable name is missing");
   }
 
-  if (!data.credentialId) {
-    await publish(
-      geminiChannel().status({
-        nodeId,
-        status: "error",
-      }),
-    );
-    throw new NonRetriableError("Gemini node: Credential is required");
-  }
-
   if (!data.userPrompt) {
     await publish(
       geminiChannel().status({
@@ -71,35 +61,47 @@ export const geminiExecutor: NodeExecutor<GeminiData> = async ({
     : "You are a helpful assistant.";
   const userPrompt = Handlebars.compile(data.userPrompt)(context);
 
-  const credential = await step.run("get-credential", () => {
-    return prisma.credential.findUnique({
-      where: {
-        id: data.credentialId,
-        userId,
-      },
-    });
-  });
+  // Resolve API key: prefer .env hardcoded key, fallback to DB credential
+  let apiKey: string | undefined = process.env.GEMINI_API_KEY;
 
-  if (!credential) {
+  if (!apiKey && data.credentialId) {
+    const credential = await step.run("get-credential", () => {
+      return prisma.credential.findUnique({
+        where: {
+          id: data.credentialId,
+          userId,
+        },
+      });
+    });
+
+    if (credential) {
+      apiKey = decrypt(credential.value);
+    }
+  }
+
+  if (!apiKey) {
     await publish(
       geminiChannel().status({
         nodeId,
         status: "error",
       })
     );
-    throw new NonRetriableError("Gemini node: Credential not found");
+    throw new NonRetriableError(
+      "Gemini node: No API key found. Set GEMINI_API_KEY in your .env file or select a credential."
+    );
   }
 
   const google = createGoogleGenerativeAI({
-    apiKey: decrypt(credential.value),
+    apiKey,
   });
 
   try {
+    // Hardcoded to gemini-2.5-flash
     const { steps } = await step.ai.wrap(
       "gemini-generate-text",
       generateText,
       {
-        model: google("gemini-2.0-flash"),
+        model: google("gemini-2.5-flash"),
         system: systemPrompt,
         prompt: userPrompt,
         experimental_telemetry: {

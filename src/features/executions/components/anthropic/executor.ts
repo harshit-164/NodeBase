@@ -46,16 +46,6 @@ export const anthropicExecutor: NodeExecutor<AnthropicData> = async ({
     throw new NonRetriableError("Anthropic node: Variable name is missing");
   }
 
-  if (!data.credentialId) {
-    await publish(
-      anthropicChannel().status({
-        nodeId,
-        status: "error",
-      }),
-    );
-    throw new NonRetriableError("Anthropic node: Credential is required");
-  }
-
   if (!data.userPrompt) {
     await publish(
       anthropicChannel().status({
@@ -71,35 +61,47 @@ export const anthropicExecutor: NodeExecutor<AnthropicData> = async ({
     : "You are a helpful assistant.";
   const userPrompt = Handlebars.compile(data.userPrompt)(context);
 
-  const credential = await step.run("get-credential", () => {
-    return prisma.credential.findUnique({
-      where: {
-        id: data.credentialId,
-        userId,
-      },
-    });
-  });
+  // Resolve API key: prefer .env hardcoded key, fallback to DB credential
+  let apiKey: string | undefined = process.env.ANTHROPIC_API_KEY;
 
-  if (!credential) {
+  if (!apiKey && data.credentialId) {
+    const credential = await step.run("get-credential", () => {
+      return prisma.credential.findUnique({
+        where: {
+          id: data.credentialId,
+          userId,
+        },
+      });
+    });
+
+    if (credential) {
+      apiKey = decrypt(credential.value);
+    }
+  }
+
+  if (!apiKey) {
     await publish(
       anthropicChannel().status({
         nodeId,
         status: "error",
       })
     );
-    throw new NonRetriableError("Anthropic node: Credential not found");
+    throw new NonRetriableError(
+      "Anthropic node: No API key found. Set ANTHROPIC_API_KEY in your .env file or select a credential."
+    );
   }
 
   const anthropic = createAnthropic({
-    apiKey: decrypt(credential.value),
+    apiKey,
   });
 
   try {
+    // Hardcoded to claude-3-5-sonnet-latest
     const { steps } = await step.ai.wrap(
       "anthropic-generate-text",
       generateText,
       {
-        model: anthropic("claude-sonnet-4-5"),
+        model: anthropic("claude-3-5-sonnet-latest"),
         system: systemPrompt,
         prompt: userPrompt,
         experimental_telemetry: {
